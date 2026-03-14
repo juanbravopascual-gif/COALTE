@@ -1,0 +1,1 @@
+UPDATE blog_articles SET views_count = 150 + floor(random() * 101)::int WHERE views_count < 150;

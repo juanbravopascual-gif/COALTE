@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* COALTE Design System - Modern coworking aesthetic */
+/* Colors inspired by the green walls and neutral wood tones */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Light mode - Clean, bright, professional */
+    --background: 0 0% 99%;
+    --foreground: 150 10% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 150 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 10% 15%;
+
+    /* Primary: Deep forest green */
+    --primary: 150 40% 25%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Warm light gray */
+    --secondary: 40 10% 96%;
+    --secondary-foreground: 150 10% 15%;
+
+    /* Muted: Soft gray */
+    --muted: 40 5% 94%;
+    --muted-foreground: 150 5% 45%;
+
+    /* Accent: Fresh green */
+    --accent: 145 50% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 10% 90%;
+    --input: 40 10% 90%;
+    --ring: 150 40% 25%;
+
+    --radius: 0.75rem;
+
+    /* Custom colors for COALTE */
+    --coalte-green: 145 50% 42%;
+    --coalte-green-dark: 150 40% 25%;
+    --coalte-wood: 35 30% 75%;
+    --coalte-wood-dark: 35 25% 45%;
+    --coalte-gray: 220 10% 50%;
+    --coalte-cream: 40 20% 97%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 150 10% 25%;
+    --sidebar-primary: 150 40% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 145 30% 95%;
+    --sidebar-accent-foreground: 150 40% 25%;
+    --sidebar-border: 40 10% 90%;
+    --sidebar-ring: 150 40% 25%;
+  }
+
+  .dark {
+    --background: 150 15% 8%;
+    --foreground: 40 10% 95%;
+
+    --card: 150 12% 12%;
+    --card-foreground: 40 10% 95%;
+
+    --popover: 150 12% 12%;
+    --popover-foreground: 40 10% 95%;
+
+    --primary: 145 45% 50%;
+    --primary-foreground: 150 15% 8%;
+
+    --secondary: 150 10% 18%;
+    --secondary-foreground: 40 10% 95%;
+
+    --muted: 150 10% 18%;
+    --muted-foreground: 40 5% 60%;
+
+    --accent: 145 50% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 40 10% 95%;
+
+    --border: 150 10% 20%;
+    --input: 150 10% 20%;
+    --ring: 145 45% 50%;
+
+    --sidebar-background: 150 12% 10%;
+    --sidebar-foreground: 40 10% 90%;
+    --sidebar-primary: 145 45% 50%;
+    --sidebar-primary-foreground: 150 15% 8%;
+    --sidebar-accent: 150 10% 15%;
+    --sidebar-accent-foreground: 40 10% 90%;
+    --sidebar-border: 150 10% 18%;
+    --sidebar-ring: 145 45% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@layer components {
+  .container-coalte {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-padding {
+    @apply py-16 md:py-24;
+  }
+
+  .heading-display {
+    @apply text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight;
+  }
+
+  .heading-section {
+    @apply text-3xl md:text-4xl font-semibold tracking-tight;
+  }
+
+  .text-body-lg {
+    @apply text-lg md:text-xl leading-relaxed;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 px-6 py-3 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .gradient-green {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
