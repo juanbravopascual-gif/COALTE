@@ -537,6 +537,15 @@ export type Database = {
     Functions: {
       generate_access_code: { Args: never; Returns: string }
       generate_invoice_number: { Args: never; Returns: string }
+      get_booking_availability: {
+        Args: { p_date?: string }
+        Returns: {
+          booking_date: string
+          end_time: string
+          start_time: string
+          status: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

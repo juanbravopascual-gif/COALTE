@@ -46,14 +46,12 @@ export default function MeetingRoomAvailabilityCalendar({
   const fetchBookings = async () => {
     setIsLoading(true);
     const { data, error } = await supabase
-      .from('meeting_room_bookings')
-      .select('id, booking_date, start_time, end_time, status')
-      .neq('status', 'cancelled');
+      .rpc('get_booking_availability');
     
     if (error) {
       console.error('Error fetching bookings:', error);
     } else {
-      setBookings(data || []);
+      setBookings((data || []).map((b: any) => ({ ...b, id: `${b.booking_date}-${b.start_time}` })));
     }
     setIsLoading(false);
   };
