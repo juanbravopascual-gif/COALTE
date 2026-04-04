@@ -33,10 +33,7 @@ const includes = [
 ];
 
 // Horarios disponibles (cada hora)
-const timeSlots = [
-  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
+const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
 interface Booking {
   id: string;
@@ -140,9 +137,43 @@ export default function SalaReuniones() {
     return { start: sorted[0], end: `${endHour.toString().padStart(2, '0')}:00` };
   };
 
+  // Validate form inputs
+  const validateForm = (): boolean => {
+    const errors: string[] = [];
+
+    if (!formData.name || formData.name.length < 2 || formData.name.length > 100) {
+      errors.push('El nombre debe tener entre 2 y 100 caracteres');
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.push('Email no válido');
+    }
+    const phoneClean = formData.phone.replace(/[\s\-]/g, '');
+    if (!/^\+?[0-9]{9,15}$/.test(phoneClean)) {
+      errors.push('Teléfono debe tener entre 9-15 dígitos');
+    }
+    if (formData.company && formData.company.length > 100) {
+      errors.push('Nombre de empresa demasiado largo (max 100)');
+    }
+    if (formData.notes && formData.notes.length > 500) {
+      errors.push('Notas demasiado largas (max 500 caracteres)');
+    }
+
+    if (errors.length > 0) {
+      toast({
+        title: 'Errores de validación',
+        description: errors.join('. '),
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
   // Manejar envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateForm()) return;
     
     const times = getBookingTimes();
     if (!times) {
@@ -367,7 +398,9 @@ export default function SalaReuniones() {
                             ? 'bg-accent text-accent-foreground' 
                             : isPast || isFullyBooked
                               ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                              : 'bg-secondary hover:bg-accent/20'
+                              : existingBookings.some(b => b.booking_date === format(day, 'yyyy-MM-dd'))
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 border-2 border-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/50'
+                                : 'bg-secondary hover:bg-accent/20'
                         }`}
                       >
                         <div className="text-xs uppercase opacity-70">
@@ -483,6 +516,7 @@ export default function SalaReuniones() {
                         id="name"
                         name="name"
                         required
+                        maxLength={100}
                         value={formData.name}
                         onChange={handleChange}
                         placeholder="Tu nombre"
@@ -495,6 +529,7 @@ export default function SalaReuniones() {
                         name="email"
                         type="email"
                         required
+                        maxLength={255}
                         value={formData.email}
                         onChange={handleChange}
                         placeholder="tu@email.com"
@@ -507,6 +542,7 @@ export default function SalaReuniones() {
                         name="phone"
                         type="tel"
                         required
+                        maxLength={20}
                         value={formData.phone}
                         onChange={handleChange}
                         placeholder="+34 600 000 000"
@@ -517,6 +553,7 @@ export default function SalaReuniones() {
                       <Input
                         id="company"
                         name="company"
+                        maxLength={100}
                         value={formData.company}
                         onChange={handleChange}
                         placeholder="Nombre de tu empresa"
@@ -527,11 +564,15 @@ export default function SalaReuniones() {
                       <Textarea
                         id="notes"
                         name="notes"
+                        maxLength={500}
                         value={formData.notes}
                         onChange={handleChange}
                         placeholder="Cualquier información adicional..."
                         rows={3}
                       />
+                      <div className="text-xs text-muted-foreground text-right">
+                        {formData.notes.length}/500 caracteres
+                      </div>
                     </div>
 
                     {/* Datos bancarios */}

@@ -65,15 +65,15 @@ export default function AdminArchivoFacturas() {
         const monthName = folder.name;
         const { data: monthFiles } = await supabase.storage.from('invoices').list(`${selectedYear}/${monthName}`, { limit: 100 });
 
-        if (monthFiles) {
+          if (monthFiles) {
           for (const file of monthFiles) {
             if (file.name && !file.name.startsWith('.')) {
               const path = `${selectedYear}/${monthName}/${file.name}`;
-              const { data: urlData } = supabase.storage.from('invoices').getPublicUrl(path);
+              const { data: urlData } = await supabase.storage.from('invoices').createSignedUrl(path, 3600);
               allFiles.push({
                 name: file.name.replace('.pdf', '').replace(/_/g, ' '),
                 path,
-                url: urlData.publicUrl,
+                url: urlData?.signedUrl || '',
                 size: file.metadata?.size || 0,
                 month: monthName,
               });

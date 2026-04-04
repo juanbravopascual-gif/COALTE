@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Search, Calendar, Eye, ArrowRight, TrendingUp, Newspaper } from 'lucide-react';
 import { NewsletterForm } from '@/components/blog/NewsletterForm';
 import { useQuery } from '@tanstack/react-query';
+import { BlogPagination } from '@/components/blog/BlogPagination';
 
 interface Article {
   id: string;
@@ -29,11 +30,15 @@ interface Category {
   slug: string;
 }
 
+const ARTICLES_PER_PAGE = 10;
 const ARTICLES_SELECT = 'id, title, slug, excerpt, featured_image, meta_description, views_count, published_at, category_id' as const;
 
 export default function Blog() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const currentPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
 
   const { data: articles = [], isLoading } = useQuery({
     queryKey: ['blog-articles'],
@@ -45,7 +50,7 @@ export default function Blog() {
         .order('published_at', { ascending: false });
       return (data || []) as Article[];
     },
-    staleTime: 5 * 60 * 1000, // 5 min cache
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
 
@@ -55,7 +60,7 @@ export default function Blog() {
       const { data } = await supabase.from('blog_categories').select('id, name, slug');
       return (data || []) as Category[];
     },
-    staleTime: 30 * 60 * 1000, // 30 min cache
+    staleTime: 30 * 60 * 1000,
   });
 
   const { data: popularArticles = [] } = useQuery({
@@ -72,19 +77,35 @@ export default function Blog() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const filtered = articles.filter((a) => {
-    const matchSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.excerpt.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = !selectedCategory || a.category_id === selectedCategory;
-    return matchSearch && matchCategory;
-  });
+  const filtered = useMemo(() => {
+    return articles.filter((a) => {
+      const matchSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.excerpt.toLowerCase().includes(search.toLowerCase());
+      const matchCategory = !selectedCategory || a.category_id === selectedCategory;
+      return matchSearch && matchCategory;
+    });
+  }, [articles, search, selectedCategory]);
+
+  const totalPages = Math.ceil(filtered.length / ARTICLES_PER_PAGE);
+  const safePage = Math.min(currentPage, Math.max(1, totalPages));
+  const paginatedArticles = filtered.slice((safePage - 1) * ARTICLES_PER_PAGE, safePage * ARTICLES_PER_PAGE);
+
+  const handlePageChange = (page: number) => {
+    setSearchParams(page > 1 ? { page: page.toString() } : {});
+    window.scrollTo(0, 0);
+  };
 
   const getCategoryName = (catId: string | null) => {
     if (!catId) return '';
     return categories.find((c) => c.id === catId)?.name || '';
   };
 
+  const canonicalUrl = `https://coaltecoworking.lovable.app/blog${safePage > 1 ? `?page=${safePage}` : ''}`;
+
   return (
     <Layout>
+      {/* Canonical URL */}
+      <link rel="canonical" href={canonicalUrl} />
+
       {/* JSON-LD for Blog */}
       <script
         type="application/ld+json"
@@ -92,8 +113,8 @@ export default function Blog() {
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'Blog',
-            name: 'Newsletter - Actualidad del Trabajo en Alicante',
-            description: 'Artículos sobre coworking, emprendimiento, trabajo remoto y productividad en Alicante.',
+            name: 'Newsletter - Coworking en Alicante | COALTE Coworking',
+            description: 'Artículos sobre coworking en Alicante, espacios de trabajo compartidos, alquiler de salas de reuniones y emprendimiento en Alicante.',
             url: 'https://coaltecoworking.lovable.app/blog',
             publisher: {
               '@type': 'Organization',
@@ -112,10 +133,10 @@ export default function Blog() {
             <Badge variant="secondary" className="text-sm px-4 py-1">Newsletter</Badge>
           </div>
           <h1 className="heading-display mb-6">
-            Actualidad del Trabajo en Alicante
+            Coworking en Alicante – Actualidad y Recursos
           </h1>
           <p className="text-body-lg max-w-3xl mx-auto opacity-90">
-            Artículos, noticias y recursos sobre coworking, emprendimiento, trabajo remoto y productividad en Alicante.
+            Artículos sobre coworking en Alicante, espacios de trabajo compartidos, alquiler de salas de reuniones, emprendimiento y productividad.
           </p>
         </div>
       </section>
@@ -128,9 +149,12 @@ export default function Blog() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
-                placeholder="Buscar artículos..."
+                placeholder="Buscar artículos sobre coworking en Alicante..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  if (currentPage > 1) setSearchParams({});
+                }}
                 className="pl-10 h-12 text-base"
               />
             </div>
@@ -140,7 +164,10 @@ export default function Blog() {
               <Button
                 variant={selectedCategory === null ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setSelectedCategory(null)}
+                onClick={() => {
+                  setSelectedCategory(null);
+                  if (currentPage > 1) setSearchParams({});
+                }}
               >
                 Todos
               </Button>
@@ -149,7 +176,10 @@ export default function Blog() {
                   key={cat.id}
                   variant={selectedCategory === cat.id ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setSelectedCategory(cat.id)}
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    if (currentPage > 1) setSearchParams({});
+                  }}
                 >
                   {cat.name}
                 </Button>
@@ -163,13 +193,13 @@ export default function Blog() {
                   <div key={i} className="h-48 bg-muted animate-pulse rounded-lg" />
                 ))}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : paginatedArticles.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-muted-foreground text-lg">No se encontraron artículos.</p>
               </div>
             ) : (
               <div className="space-y-6">
-                {filtered.map((article) => (
+                {paginatedArticles.map((article) => (
                   <Link key={article.id} to={`/blog/${article.slug}`} className="block group">
                     <Card className="overflow-hidden card-hover">
                       <div className="flex flex-col sm:flex-row">
@@ -221,6 +251,15 @@ export default function Blog() {
                 ))}
               </div>
             )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <BlogPagination
+                currentPage={safePage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            )}
           </div>
 
           {/* Sidebar */}
@@ -228,14 +267,14 @@ export default function Blog() {
             {/* CTA */}
             <Card className="gradient-green text-primary-foreground">
               <CardContent className="p-6 text-center space-y-4">
-                <h3 className="font-display text-xl font-semibold">¿Buscas un espacio para trabajar?</h3>
-                <p className="text-sm opacity-90">Descubre COALTE Coworking en Alicante</p>
+                <h3 className="font-display text-xl font-semibold">¿Buscas un espacio de coworking en Alicante?</h3>
+                <p className="text-sm opacity-90">Descubre COALTE Coworking, tu espacio de trabajo en Alicante</p>
                 <div className="flex flex-col gap-2">
                   <Button variant="secondary" size="sm" asChild>
-                    <Link to="/sala-reuniones">Reservar sala de reuniones</Link>
+                    <Link to="/sala-reuniones">Alquiler sala de reuniones Alicante</Link>
                   </Button>
                   <Button variant="secondary" size="sm" asChild>
-                    <Link to="/servicios">Ver servicios</Link>
+                    <Link to="/servicios">Ver servicios coworking</Link>
                   </Button>
                   <Button variant="secondary" size="sm" asChild>
                     <Link to="/contacto">Contactar</Link>

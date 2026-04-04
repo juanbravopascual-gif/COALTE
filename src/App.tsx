@@ -10,6 +10,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 
 // Components
 import { SplashScreen } from "./components/SplashScreen";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 // Public Pages
 import Index from "./pages/Index";
@@ -39,6 +40,7 @@ import AdminHome from "./pages/admin/AdminHome";
 import AdminUsuarios from "./pages/admin/AdminUsuarios";
 import AdminSalaReuniones from "./pages/admin/AdminSalaReuniones";
 import AdminBlog from "./pages/admin/AdminBlog";
+import AdminEstadisticasReservas from "./pages/admin/AdminEstadisticasReservas";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +51,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <ScrollToTop />
         <AuthProvider>
           <Routes>
             {/* Public Routes */}
@@ -78,6 +81,7 @@ const App = () => (
             <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsuarios /></ProtectedRoute>} />
             <Route path="/admin/sala-reuniones" element={<ProtectedRoute requireAdmin><AdminSalaReuniones /></ProtectedRoute>} />
             <Route path="/admin/blog" element={<ProtectedRoute requireAdmin><AdminBlog /></ProtectedRoute>} />
+            <Route path="/admin/estadisticas-reservas" element={<ProtectedRoute requireAdmin><AdminEstadisticasReservas /></ProtectedRoute>} />
 
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />

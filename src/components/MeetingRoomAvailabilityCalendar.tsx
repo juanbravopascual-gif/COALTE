@@ -19,10 +19,7 @@ interface MeetingRoomAvailabilityCalendarProps {
   selectedDate?: Date;
 }
 
-const timeSlots = [
-  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
-  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
-];
+const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
 export default function MeetingRoomAvailabilityCalendar({ 
   onDateSelect, 
@@ -151,7 +148,7 @@ export default function MeetingRoomAvailabilityCalendar({
           <span className="text-muted-foreground">Disponible</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded bg-yellow-500/20 border border-yellow-500" />
+          <div className="w-4 h-4 rounded bg-yellow-300/40 border-2 border-yellow-400" />
           <span className="text-muted-foreground">Parcialmente ocupado</span>
         </div>
         <div className="flex items-center gap-2">
@@ -201,7 +198,7 @@ export default function MeetingRoomAvailabilityCalendar({
                     isSelected && "ring-2 ring-accent bg-accent/10",
                     isCurrentDay && !isSelected && "font-bold",
                     status === 'free' && !isPast && "bg-green-500/10 border border-green-500/30",
-                    status === 'partial' && !isPast && "bg-yellow-500/10 border border-yellow-500/30",
+                    status === 'partial' && !isPast && "bg-yellow-300/40 border-2 border-yellow-400",
                     status === 'booked' && !isPast && "bg-red-500/10 border border-red-500/30"
                   )}
                 >

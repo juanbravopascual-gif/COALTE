@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { WhatsAppButton } from '@/components/WhatsAppButton';
 import logoIcon from '@/assets/images/logo-coalte-black.png';
 import {
-  LayoutDashboard, Building, Calendar, FileText, CreditCard, Key, Users, Settings, LogOut, Menu, X, ChevronRight, Newspaper
+  LayoutDashboard, Building, Calendar, FileText, CreditCard, Key, Users, Settings, LogOut, Menu, X, ChevronRight, Newspaper, BarChart3
 } from 'lucide-react';
 
 const clientNav = [
@@ -19,6 +19,7 @@ const adminNav = [
   { name: 'Panel Admin', href: '/admin', icon: LayoutDashboard },
   { name: 'Usuarios', href: '/admin/usuarios', icon: Users },
   { name: 'Sala de Reuniones', href: '/admin/sala-reuniones', icon: Calendar },
+  { name: 'Estadísticas Reservas', href: '/admin/estadisticas-reservas', icon: BarChart3 },
   { name: 'Blog', href: '/admin/blog', icon: Newspaper },
 ];
 
