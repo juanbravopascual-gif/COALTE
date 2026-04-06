@@ -13,8 +13,15 @@ import { supabase } from '@/integrations/supabase/client';
 import salaReuniones from '@/assets/images/sala-reuniones.jpg';
 import MeetingRoomAvailabilityCalendar from '@/components/MeetingRoomAvailabilityCalendar';
 
-const HOURLY_RATE = 20; // €/hora IVA incluido
-const DAILY_RATE = 80; // €/día IVA incluido
+const HOURLY_RATE = 20;
+const MAX_PRICE = 80;
+const MIN_HOURS = 2;
+
+const calculatePrice = (hours: number): number => {
+  if (hours <= 0) return 0;
+  const total = hours * HOURLY_RATE;
+  return Math.min(total, MAX_PRICE);
+};
 
 const features = [
   { icon: Users, text: 'Capacidad 8 personas' },
@@ -32,7 +39,6 @@ const includes = [
   'Acceso 24h',
 ];
 
-// Horarios disponibles (cada hora)
 const timeSlots = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
 interface Booking {
@@ -46,7 +52,6 @@ interface Booking {
 export default function SalaReuniones() {
   const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [bookingType, setBookingType] = useState<'hourly' | 'daily'>('hourly');
   const [selectedHours, setSelectedHours] = useState<string[]>([]);
   const [existingBookings, setExistingBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,7 +65,6 @@ export default function SalaReuniones() {
     notes: '',
   });
 
-  // Cargar reservas existentes
   useEffect(() => {
     fetchBookings();
   }, []);
@@ -70,7 +74,7 @@ export default function SalaReuniones() {
     const { data, error } = await supabase
       .from('meeting_room_bookings')
       .select('id, booking_date, start_time, end_time, status')
-      .neq('status', 'cancelled');
+      .eq('status', 'confirmed');
     
     if (error) {
       console.error('Error fetching bookings:', error);
@@ -80,7 +84,6 @@ export default function SalaReuniones() {
     setIsLoading(false);
   };
 
-  // Verificar si un slot está ocupado
   const isSlotBooked = (date: Date, time: string) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return existingBookings.some(booking => {
@@ -92,26 +95,12 @@ export default function SalaReuniones() {
     });
   };
 
-  // Verificar si una fecha tiene todo el día ocupado
   const isDayFullyBooked = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const dayBookings = existingBookings.filter(b => b.booking_date === dateStr);
-    
-    // Verificar si hay una reserva de día completo
-    const hasFullDay = dayBookings.some(b => 
-      b.start_time === '08:00:00' && b.end_time === '20:00:00'
-    );
-    if (hasFullDay) return true;
-    
-    // Verificar si todos los slots están ocupados
     return timeSlots.every(time => isSlotBooked(date, time));
   };
 
-  // Toggle selección de hora
   const toggleHour = (time: string) => {
-    if (bookingType === 'daily') return;
     if (isSlotBooked(selectedDate, time)) return;
-    
     setSelectedHours(prev => 
       prev.includes(time) 
         ? prev.filter(t => t !== time)
@@ -119,17 +108,7 @@ export default function SalaReuniones() {
     );
   };
 
-  // Calcular precio total
-  const calculateTotal = () => {
-    if (bookingType === 'daily') return DAILY_RATE;
-    return selectedHours.length * HOURLY_RATE;
-  };
-
-  // Calcular horario de reserva
   const getBookingTimes = () => {
-    if (bookingType === 'daily') {
-      return { start: '08:00', end: '20:00' };
-    }
     if (selectedHours.length === 0) return null;
     const sorted = [...selectedHours].sort();
     const startHour = parseInt(sorted[0].split(':')[0]);
@@ -137,10 +116,8 @@ export default function SalaReuniones() {
     return { start: sorted[0], end: `${endHour.toString().padStart(2, '0')}:00` };
   };
 
-  // Validate form inputs
   const validateForm = (): boolean => {
     const errors: string[] = [];
-
     if (!formData.name || formData.name.length < 2 || formData.name.length > 100) {
       errors.push('El nombre debe tener entre 2 y 100 caracteres');
     }
@@ -157,38 +134,27 @@ export default function SalaReuniones() {
     if (formData.notes && formData.notes.length > 500) {
       errors.push('Notas demasiado largas (max 500 caracteres)');
     }
-
+    if (selectedHours.length < MIN_HOURS) {
+      errors.push(`Debes seleccionar al menos ${MIN_HOURS} horas`);
+    }
     if (errors.length > 0) {
-      toast({
-        title: 'Errores de validación',
-        description: errors.join('. '),
-        variant: 'destructive',
-      });
+      toast({ title: 'Errores de validación', description: errors.join('. '), variant: 'destructive' });
       return false;
     }
     return true;
   };
 
-  // Manejar envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm()) return;
     
     const times = getBookingTimes();
-    if (!times) {
-      toast({
-        title: 'Error',
-        description: 'Por favor selecciona al menos una hora.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    if (!times) return;
 
     setIsSubmitting(true);
-
     try {
-      // Guardar en base de datos
+      const totalPrice = calculatePrice(selectedHours.length);
+
       const { error: dbError } = await supabase
         .from('meeting_room_bookings')
         .insert({
@@ -199,72 +165,61 @@ export default function SalaReuniones() {
           booking_date: format(selectedDate, 'yyyy-MM-dd'),
           start_time: times.start,
           end_time: times.end,
-          booking_type: bookingType,
-          hours: bookingType === 'hourly' ? selectedHours.length : null,
-          total_price: calculateTotal(),
+          booking_type: 'hourly',
+          hours: selectedHours.length,
+          total_price: totalPrice,
           payment_method: 'transfer',
+          status: 'pending',
           notes: formData.notes || null,
         });
 
       if (dbError) throw dbError;
 
-      // Enviar notificaciones
-      const { data: notifData, error: notifError } = await supabase.functions.invoke('send-booking-notification', {
-        body: {
-          clientName: formData.name,
-          clientEmail: formData.email,
-          clientPhone: formData.phone,
-          clientCompany: formData.company,
-          bookingDate: format(selectedDate, 'yyyy-MM-dd'),
-          startTime: times.start,
-          endTime: times.end,
-          bookingType,
-          hours: selectedHours.length,
-          totalPrice: calculateTotal(),
-          notes: formData.notes,
-        },
-      });
-
-      if (notifError) {
-        console.error('Error sending notification:', notifError);
-      }
-
-      // Abrir WhatsApp en nueva ventana
-      if (notifData?.whatsappUrl) {
-        window.open(notifData.whatsappUrl, '_blank');
+      // Send notification
+      try {
+        const { data: notifData } = await supabase.functions.invoke('send-booking-notification', {
+          body: {
+            clientName: formData.name,
+            clientEmail: formData.email,
+            clientPhone: formData.phone,
+            clientCompany: formData.company,
+            bookingDate: format(selectedDate, 'yyyy-MM-dd'),
+            startTime: times.start,
+            endTime: times.end,
+            bookingType: 'hourly',
+            hours: selectedHours.length,
+            totalPrice,
+            notes: formData.notes,
+          },
+        });
+        if (notifData?.whatsappUrl) {
+          window.open(notifData.whatsappUrl, '_blank');
+        }
+      } catch (notifErr) {
+        console.error('Notification error:', notifErr);
       }
 
       toast({
-        title: '¡Reserva recibida!',
-        description: 'Te hemos enviado los datos para realizar la transferencia. Confirmaremos tu reserva una vez recibido el pago.',
+        title: '¡Solicitud de reserva enviada!',
+        description: 'Tu reserva está pendiente de validación por el administrador. Te confirmaremos por email.',
       });
 
-      // Reset form
       setShowForm(false);
       setSelectedHours([]);
       setFormData({ name: '', email: '', phone: '', company: '', notes: '' });
       fetchBookings();
-
     } catch (error: any) {
       console.error('Error creating booking:', error);
-      toast({
-        title: 'Error',
-        description: 'No se pudo procesar la reserva. Por favor, inténtalo de nuevo.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'No se pudo procesar la reserva. Inténtalo de nuevo.', variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // Generar días para el calendario
   const generateCalendarDays = () => {
     const days = [];
     for (let i = 0; i < 14; i++) {
@@ -278,36 +233,30 @@ export default function SalaReuniones() {
   return (
     <Layout>
       {/* Hero */}
-      <section className="relative h-[50vh] min-h-[400px] flex items-center">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${salaReuniones})` }}
-        >
+      <section className="relative min-h-[50vh] sm:min-h-[400px] flex items-center py-16 sm:py-0">
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${salaReuniones})` }}>
           <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-primary/70" />
         </div>
-        <div className="container-coalte relative z-10 text-white">
+        <div className="container-coalte relative z-10 text-white px-4 sm:px-6">
           <div className="max-w-2xl">
             <span className="inline-block px-4 py-2 bg-accent text-accent-foreground rounded-full text-sm font-medium mb-4">
               Reserva Online
             </span>
-            <h1 className="heading-display mb-4">
-              Sala de Reuniones
-            </h1>
-            <p className="text-xl text-white/90 mb-6">
-              Espacio profesional para tus reuniones, presentaciones y eventos. 
-              Totalmente equipada y disponible 24 horas.
+            <h1 className="heading-display mb-4 text-3xl sm:text-4xl lg:text-5xl">Sala de Reuniones</h1>
+            <p className="text-lg sm:text-xl text-white/90 mb-6">
+              Espacio profesional para tus reuniones, presentaciones y eventos. Totalmente equipada y disponible 24 horas.
             </p>
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-lg">
-                <Clock className="h-5 w-5" />
-                <span className="font-semibold">20€/hora</span>
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-2 rounded-lg">
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="font-semibold text-sm sm:text-base">20€/hora</span>
               </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-lg">
-                <Calendar className="h-5 w-5" />
-                <span className="font-semibold">80€/día</span>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-2 rounded-lg">
+                <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="font-semibold text-sm sm:text-base">Máx. 80€ (+4h)</span>
               </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-4 py-2 rounded-lg">
-                <span className="text-sm">IVA incluido</span>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur px-3 py-2 rounded-lg">
+                <span className="text-xs sm:text-sm">IVA incluido · Mín. 2h</span>
               </div>
             </div>
           </div>
@@ -336,52 +285,40 @@ export default function SalaReuniones() {
           <div className="text-center mb-12">
             <h2 className="heading-section mb-4">Reserva tu sala</h2>
             <p className="text-body-lg text-muted-foreground max-w-2xl mx-auto">
-              Selecciona la fecha y el horario que necesitas. Recibirás confirmación 
-              por email una vez verificado el pago.
+              Selecciona la fecha y el horario que necesitas (mínimo 2 horas). 
+              Tu reserva será validada por nuestro equipo antes de confirmarse.
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Calendario y selección */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
             <div className="lg:col-span-2 space-y-6">
-              {/* Tipo de reserva */}
-              <div className="bg-card border border-border rounded-xl p-6">
-                <h3 className="font-display text-lg font-semibold mb-4">Tipo de reserva</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => { setBookingType('hourly'); setSelectedHours([]); }}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      bookingType === 'hourly' 
-                        ? 'border-accent bg-accent/10' 
-                        : 'border-border hover:border-accent/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="h-5 w-5 text-accent" />
-                      <span className="font-semibold">Por horas</span>
-                    </div>
-                    <p className="text-2xl font-bold text-accent">{HOURLY_RATE}€<span className="text-sm font-normal text-muted-foreground">/hora</span></p>
-                  </button>
-                  <button
-                    onClick={() => { setBookingType('daily'); setSelectedHours([]); }}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      bookingType === 'daily' 
-                        ? 'border-accent bg-accent/10' 
-                        : 'border-border hover:border-accent/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="h-5 w-5 text-accent" />
-                      <span className="font-semibold">Día completo</span>
-                    </div>
-                    <p className="text-2xl font-bold text-accent">{DAILY_RATE}€<span className="text-sm font-normal text-muted-foreground">/día</span></p>
-                  </button>
+              {/* Pricing info */}
+              <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
+                <h3 className="font-display text-base sm:text-lg font-semibold mb-4">Tarifas</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="bg-secondary rounded-lg p-3">
+                    <p className="text-sm text-muted-foreground">2 horas</p>
+                    <p className="text-xl font-bold text-accent">40€</p>
+                  </div>
+                  <div className="bg-secondary rounded-lg p-3">
+                    <p className="text-sm text-muted-foreground">3 horas</p>
+                    <p className="text-xl font-bold text-accent">60€</p>
+                  </div>
+                  <div className="bg-secondary rounded-lg p-3">
+                    <p className="text-sm text-muted-foreground">4 horas</p>
+                    <p className="text-xl font-bold text-accent">80€</p>
+                  </div>
+                  <div className="bg-secondary rounded-lg p-3">
+                    <p className="text-sm text-muted-foreground">+4 horas</p>
+                    <p className="text-xl font-bold text-accent">80€</p>
+                    <p className="text-xs text-muted-foreground">máximo</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Selector de fecha */}
-              <div className="bg-card border border-border rounded-xl p-6">
-                <h3 className="font-display text-lg font-semibold mb-4">Selecciona fecha</h3>
+              {/* Date selector */}
+              <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
+                <h3 className="font-display text-base sm:text-lg font-semibold mb-4">Selecciona fecha</h3>
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {calendarDays.map((day) => {
                     const isSelected = format(day, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
@@ -393,7 +330,7 @@ export default function SalaReuniones() {
                         key={day.toISOString()}
                         onClick={() => { setSelectedDate(day); setSelectedHours([]); }}
                         disabled={isPast || isFullyBooked}
-                        className={`shrink-0 w-16 p-3 rounded-xl text-center transition-all ${
+                        className={`shrink-0 w-14 sm:w-16 p-2 sm:p-3 rounded-xl text-center transition-all ${
                           isSelected 
                             ? 'bg-accent text-accent-foreground' 
                             : isPast || isFullyBooked
@@ -403,75 +340,53 @@ export default function SalaReuniones() {
                                 : 'bg-secondary hover:bg-accent/20'
                         }`}
                       >
-                        <div className="text-xs uppercase opacity-70">
-                          {format(day, 'EEE', { locale: es })}
-                        </div>
-                        <div className="text-lg font-bold">
-                          {format(day, 'd')}
-                        </div>
-                        <div className="text-xs opacity-70">
-                          {format(day, 'MMM', { locale: es })}
-                        </div>
+                        <div className="text-xs uppercase opacity-70">{format(day, 'EEE', { locale: es })}</div>
+                        <div className="text-lg font-bold">{format(day, 'd')}</div>
+                        <div className="text-xs opacity-70">{format(day, 'MMM', { locale: es })}</div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Selector de horas */}
-              {bookingType === 'hourly' && (
-                <div className="bg-card border border-border rounded-xl p-6">
-                  <h3 className="font-display text-lg font-semibold mb-4">
-                    Selecciona horario - {format(selectedDate, "d 'de' MMMM", { locale: es })}
-                  </h3>
-                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-2">
-                    {timeSlots.map((time) => {
-                      const isBooked = isSlotBooked(selectedDate, time);
-                      const isSelected = selectedHours.includes(time);
-                      
-                      return (
-                        <button
-                          key={time}
-                          onClick={() => toggleHour(time)}
-                          disabled={isBooked}
-                          className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                            isBooked
-                              ? 'bg-destructive/20 text-destructive cursor-not-allowed line-through'
-                              : isSelected
-                                ? 'bg-accent text-accent-foreground'
-                                : 'bg-secondary hover:bg-accent/20'
-                          }`}
-                        >
-                          {time}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-4">
-                    Puedes seleccionar múltiples horas. Las horas tachadas ya están reservadas.
-                  </p>
+              {/* Time slots */}
+              <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
+                <h3 className="font-display text-base sm:text-lg font-semibold mb-2">
+                  Selecciona horario - {format(selectedDate, "d 'de' MMMM", { locale: es })}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">Selecciona mínimo {MIN_HOURS} horas. Solo se reservan las horas seleccionadas.</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                  {timeSlots.map((time) => {
+                    const isBooked = isSlotBooked(selectedDate, time);
+                    const isSelected = selectedHours.includes(time);
+                    
+                    return (
+                      <button
+                        key={time}
+                        onClick={() => toggleHour(time)}
+                        disabled={isBooked}
+                        className={`p-3 rounded-lg text-sm font-medium transition-all min-h-[48px] flex items-center justify-center ${
+                          isBooked
+                            ? 'bg-destructive/20 text-destructive cursor-not-allowed line-through'
+                            : isSelected
+                              ? 'bg-accent text-accent-foreground'
+                              : 'bg-secondary hover:bg-accent/20'
+                        }`}
+                      >
+                        {time}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-
-              {bookingType === 'daily' && (
-                <div className="bg-card border border-border rounded-xl p-6">
-                  <h3 className="font-display text-lg font-semibold mb-4">
-                    Reserva día completo - {format(selectedDate, "d 'de' MMMM", { locale: es })}
-                  </h3>
-                  <div className="flex items-center gap-4 p-4 bg-accent/10 rounded-lg">
-                    <Clock className="h-6 w-6 text-accent" />
-                    <div>
-                      <p className="font-semibold">Acceso de 08:00 a 20:00</p>
-                      <p className="text-sm text-muted-foreground">12 horas de uso exclusivo de la sala</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+                {selectedHours.length > 0 && selectedHours.length < MIN_HOURS && (
+                  <p className="text-sm text-destructive mt-3">Selecciona al menos {MIN_HOURS} horas (faltan {MIN_HOURS - selectedHours.length})</p>
+                )}
+              </div>
             </div>
 
-            {/* Resumen y formulario */}
+            {/* Summary & form */}
             <div className="space-y-6">
-              <div className="bg-card border border-border rounded-xl p-6 sticky top-24">
+              <div className="bg-card border border-border rounded-xl p-4 sm:p-6 lg:sticky lg:top-24">
                 <h3 className="font-display text-lg font-semibold mb-4">Resumen</h3>
                 
                 <div className="space-y-3 mb-6">
@@ -480,21 +395,24 @@ export default function SalaReuniones() {
                     <span className="font-medium">{format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tipo</span>
-                    <span className="font-medium">
-                      {bookingType === 'daily' ? 'Día completo' : `${selectedHours.length} hora(s)`}
-                    </span>
+                    <span className="text-muted-foreground">Horas</span>
+                    <span className="font-medium">{selectedHours.length} hora(s)</span>
                   </div>
-                  {bookingType === 'hourly' && selectedHours.length > 0 && (
+                  {selectedHours.length > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Horario</span>
                       <span className="font-medium">{getBookingTimes()?.start} - {getBookingTimes()?.end}</span>
                     </div>
                   )}
+                  {selectedHours.length > 4 && (
+                    <div className="bg-accent/10 text-accent text-xs p-2 rounded-lg text-center">
+                      Precio máximo aplicado: 80€ (más de 4 horas)
+                    </div>
+                  )}
                   <div className="border-t border-border my-4" />
                   <div className="flex justify-between">
                     <span className="font-semibold">Total</span>
-                    <span className="text-2xl font-bold text-accent">{calculateTotal()}€</span>
+                    <span className="text-2xl font-bold text-accent">{calculatePrice(selectedHours.length)}€</span>
                   </div>
                   <p className="text-xs text-muted-foreground text-right">IVA incluido</p>
                 </div>
@@ -502,80 +420,36 @@ export default function SalaReuniones() {
                 {!showForm ? (
                   <Button 
                     onClick={() => setShowForm(true)}
-                    className="w-full"
+                    className="w-full min-h-[48px] text-base"
                     size="lg"
-                    disabled={(bookingType === 'hourly' && selectedHours.length === 0) || isDayFullyBooked(selectedDate)}
+                    disabled={selectedHours.length < MIN_HOURS}
                   >
-                    {isDayFullyBooked(selectedDate) ? 'Día no disponible' : 'Continuar con la reserva'}
+                    {selectedHours.length < MIN_HOURS ? `Selecciona mín. ${MIN_HOURS}h` : 'Continuar con la reserva'}
                   </Button>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Nombre completo *</Label>
-                      <Input
-                        id="name"
-                        name="name"
-                        required
-                        maxLength={100}
-                        value={formData.name}
-                        onChange={handleChange}
-                        placeholder="Tu nombre"
-                      />
+                      <Input id="name" name="name" required maxLength={100} value={formData.name} onChange={handleChange} placeholder="Tu nombre" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email *</Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        required
-                        maxLength={255}
-                        value={formData.email}
-                        onChange={handleChange}
-                        placeholder="tu@email.com"
-                      />
+                      <Input id="email" name="email" type="email" required maxLength={255} value={formData.email} onChange={handleChange} placeholder="tu@email.com" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Teléfono *</Label>
-                      <Input
-                        id="phone"
-                        name="phone"
-                        type="tel"
-                        required
-                        maxLength={20}
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="+34 600 000 000"
-                      />
+                      <Input id="phone" name="phone" type="tel" required maxLength={20} value={formData.phone} onChange={handleChange} placeholder="+34 600 000 000" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="company">Empresa (opcional)</Label>
-                      <Input
-                        id="company"
-                        name="company"
-                        maxLength={100}
-                        value={formData.company}
-                        onChange={handleChange}
-                        placeholder="Nombre de tu empresa"
-                      />
+                      <Input id="company" name="company" maxLength={100} value={formData.company} onChange={handleChange} placeholder="Nombre de tu empresa" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="notes">Notas (opcional)</Label>
-                      <Textarea
-                        id="notes"
-                        name="notes"
-                        maxLength={500}
-                        value={formData.notes}
-                        onChange={handleChange}
-                        placeholder="Cualquier información adicional..."
-                        rows={3}
-                      />
-                      <div className="text-xs text-muted-foreground text-right">
-                        {formData.notes.length}/500 caracteres
-                      </div>
+                      <Textarea id="notes" name="notes" maxLength={500} value={formData.notes} onChange={handleChange} placeholder="Cualquier información adicional..." rows={3} />
+                      <div className="text-xs text-muted-foreground text-right">{formData.notes.length}/500</div>
                     </div>
 
-                    {/* Datos bancarios */}
                     <div className="bg-secondary p-4 rounded-lg space-y-2">
                       <div className="flex items-center gap-2 text-sm font-semibold">
                         <CreditCard className="h-4 w-4" />
@@ -589,27 +463,22 @@ export default function SalaReuniones() {
                       </div>
                     </div>
 
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-lg">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                        ⚠️ Tu reserva quedará <strong>pendiente de validación</strong> por el administrador. 
+                        Te confirmaremos por email.
+                      </p>
+                    </div>
+
                     <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setShowForm(false)}
-                        className="flex-1"
-                      >
-                        Atrás
-                      </Button>
-                      <Button
-                        type="submit"
-                        className="flex-1"
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? 'Procesando...' : 'Confirmar reserva'}
+                      <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="flex-1">Atrás</Button>
+                      <Button type="submit" className="flex-1 min-h-[48px] text-base" disabled={isSubmitting}>
+                        {isSubmitting ? 'Enviando...' : 'Enviar solicitud'}
                       </Button>
                     </div>
 
                     <p className="text-xs text-muted-foreground text-center">
                       Al reservar aceptas nuestra política de privacidad.
-                      Te contactaremos para confirmar la reserva.
                     </p>
                   </form>
                 )}
@@ -619,13 +488,13 @@ export default function SalaReuniones() {
         </div>
       </section>
 
-      {/* Calendario de Disponibilidad */}
+      {/* Availability Calendar */}
       <section className="section-padding bg-background">
         <div className="container-coalte">
           <div className="text-center mb-12">
             <h2 className="heading-section mb-4">Consulta la disponibilidad</h2>
             <p className="text-body-lg text-muted-foreground max-w-2xl mx-auto">
-              Visualiza en tiempo real qué días y horas están disponibles para reservar la sala de reuniones.
+              Visualiza en tiempo real qué días y horas están disponibles.
             </p>
           </div>
           <div className="max-w-4xl mx-auto">
@@ -633,7 +502,6 @@ export default function SalaReuniones() {
               onDateSelect={(date) => {
                 setSelectedDate(date);
                 setSelectedHours([]);
-                // Scroll suave a la sección de reserva
                 document.getElementById('booking-section')?.scrollIntoView({ behavior: 'smooth' });
               }}
               selectedDate={selectedDate}
@@ -664,19 +532,15 @@ export default function SalaReuniones() {
         <div className="container-coalte text-center">
           <h2 className="heading-section mb-4">¿Tienes dudas?</h2>
           <p className="text-primary-foreground/80 max-w-xl mx-auto mb-8">
-            Contáctanos directamente y resolveremos cualquier pregunta sobre la reserva.
+            Contáctanos directamente y resolveremos cualquier pregunta.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" variant="secondary" asChild>
-              <a href="tel:+34676502002">
-                <Phone className="mr-2 h-5 w-5" />
-                Llamar ahora
-              </a>
+              <a href="tel:+34676502002"><Phone className="mr-2 h-5 w-5" />Llamar ahora</a>
             </Button>
             <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white" asChild>
               <a href="https://wa.me/34676502002" target="_blank" rel="noopener noreferrer">
-                <FaWhatsapp className="mr-2 h-5 w-5" />
-                WhatsApp
+                <FaWhatsapp className="mr-2 h-5 w-5" />WhatsApp
               </a>
             </Button>
           </div>
